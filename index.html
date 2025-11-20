@@ -105,7 +105,7 @@
     <form id="noteForm" autocomplete="off">
       <div class="row">
         <input id="noteCC" placeholder="CC (Customer Code)" />
-        <input id="noteTitle" list="presetTitles" placeholder="Title (choose or type…)" required />
+        <input id="noteTitle" list="presetTitles" placeholder="Case (choose or type…)" required />
       </div>
       <div class="row">
         <textarea id="noteContent" placeholder="Content (optional)…"></textarea>
@@ -147,46 +147,53 @@ const PRESETS = [
   { title: "Drop quotation", color: "#f9f9f9", cls: "p-drop-quotation-marks" }
 ];
 
-// Case-insensitive lookup maps
 const COLOR_MAP = Object.fromEntries(PRESETS.map(p => [p.title.toLowerCase(), p.color]));
 const CLASS_MAP = Object.fromEntries(PRESETS.map(p => [p.title.toLowerCase(), p.cls]));
 
-/* ========= Utility Functions ========= */
+/* ========= Utilities ========= */
 const saveNotes = () => localStorage.setItem("notes_v1", JSON.stringify(notes));
 
 const colorFor = (title = "") => COLOR_MAP[title.toLowerCase()] || "#f9f9f9";
 const pastelClassFor = (title = "") => CLASS_MAP[title.toLowerCase()] || "";
 
-/* ========= Seed Defaults on First Run ========= */
+/* ========= Auto-capitalize ========= */
+function autoCapitalize(text) {
+  return text.replace(/(^\s*\w|[.!?]\s*\w)/g, m => m.toUpperCase());
+}
+
+/* ========= Ensure date ========= */
+function ensureCreatedDate(note) {
+  if (!note.created) {
+    note.created = new Date().toLocaleString();
+  }
+}
+
+/* ========= First-time Seed ========= */
 if (notes.length === 0) {
   notes = PRESETS.map((p, i) => ({
     id: Date.now() + i,
     title: p.title,
     cc: "",
     content: "",
+    rawContent: "",
     color: p.color,
     cls: p.cls,
+    created: new Date().toLocaleString()
   }));
   saveNotes();
 }
 
-/* ========= Clipboard ========= */
+/* ========= Copy Popup ========= */
 function copyToClipboard(text) {
   navigator.clipboard.writeText(text).then(() => {
     const msg = document.createElement("div");
     msg.textContent = "Copied!";
     Object.assign(msg.style, {
-      position: "fixed",
-      bottom: "20px",
-      right: "20px",
-      background: "#238636",
-      color: "#fff",
-      padding: "8px 14px",
-      borderRadius: "10px",
+      position: "fixed", bottom: "20px", right: "20px",
+      background: "#238636", color: "#fff",
+      padding: "8px 14px", borderRadius: "10px",
       boxShadow: "0 4px 12px rgba(0,0,0,.3)",
-      zIndex: 9999,
-      fontSize: "14px",
-      transition: "opacity .3s ease",
+      zIndex: 9999, fontSize: "14px", transition: "opacity .3s ease"
     });
     document.body.appendChild(msg);
     setTimeout(() => (msg.style.opacity = "0"), 800);
@@ -194,57 +201,44 @@ function copyToClipboard(text) {
   });
 }
 
-/* ========= Render ========= */
+/* ========= Rendering ========= */
 function renderNotes(filter = "") {
   els.grid.innerHTML = "";
   const q = filter.trim().toLowerCase();
 
   notes
-    .filter(n => !q || n.title.toLowerCase().includes(q) || (n.content || "").toLowerCase().includes(q))
+    .filter(n => !q || n.title.toLowerCase().includes(q) || (n.rawContent || "").toLowerCase().includes(q))
     .forEach(note => {
+
+      ensureCreatedDate(note);
+
       const card = document.createElement("article");
       card.className = `card ${note.cls || pastelClassFor(note.title)}`;
       card.style.setProperty("--pastel", (note.color || colorFor(note.title)) + "99");
 
-      /* Header */
+      /* ----- Header ----- */
       const head = document.createElement("div");
       head.className = "head";
 
       const title = Object.assign(document.createElement("div"), {
         className: "title",
-        textContent: note.title,
-        contentEditable: true,
-        spellcheck: false,
-        oninput: () => {
-          note.title = title.textContent.trim();
-          note.color = colorFor(note.title);
-          note.cls = pastelClassFor(note.title);
-          saveNotes();
-          renderNotes(q);
-        },
+        textContent: `Case : ${note.title}`,
+        spellcheck: false
       });
 
-      /* Actions */
+      /* ----- Actions ----- */
       const actions = document.createElement("div");
       actions.className = "actions";
 
-      // 📋 Copy button
       const copyBtn = makeButton("📋", "Copy note", () => {
-        const temp = document.createElement("div");
-        temp.innerHTML = note.content || "";
-        const paragraphs = [...temp.querySelectorAll("p")];
-        const contentText = paragraphs.length
-          ? paragraphs.map(p => p.textContent.trim()).join("\n")
-          : temp.textContent.trim();
-
-        const textToCopy = `Title: ${note.title}\nCC: ${note.cc || "-"}\n\n${contentText}`;
+        const textToCopy =
+          `Case : ${note.title}\nCC: ${note.cc || "-"}\n\n` +
+          (note.rawContent || "");
         copyToClipboard(textToCopy);
       });
 
-      // 📄 Duplicate
       const dup = makeButton("📄", "Duplicate", () => duplicateNote(note.id));
 
-      // 🗑️ Delete
       const del = makeButton("🗑️", "Delete", () => {
         if (confirm("Delete this note?")) {
           notes = notes.filter(n => n.id !== note.id);
@@ -256,19 +250,24 @@ function renderNotes(filter = "") {
       actions.append(copyBtn, dup, del);
       head.append(title, actions);
 
-      /* Content */
-      const content = Object.assign(document.createElement("div"), {
+      /* ----- Content (editable) ----- */
+      const content = Object.assign(document.createElement("textarea"), {
         className: "content",
-        contentEditable: true,
         spellcheck: false,
-        innerHTML: note.content || "",
+        value: note.rawContent,
         oninput: () => {
-          note.content = content.innerHTML;
+          note.rawContent = autoCapitalize(content.value);
+
+          note.content = note.rawContent
+            .split("\n")
+            .map(line => line === "" ? "<br>" : `<p>${line}</p>`)
+            .join("");
+
           saveNotes();
-        },
+        }
       });
 
-      /* Meta */
+      /* ----- Meta (CC + Date) ----- */
       const meta = document.createElement("div");
       meta.className = "meta";
 
@@ -277,27 +276,32 @@ function renderNotes(filter = "") {
 
       const ccLabel = Object.assign(document.createElement("span"), {
         className: "muted",
-        textContent: "CC:",
+        textContent: "CC:"
       });
 
       const ccVal = Object.assign(document.createElement("span"), {
         contentEditable: true,
-        textContent: note.cc || "",
+        textContent: note.cc,
         oninput: () => {
           note.cc = ccVal.textContent.trim();
           saveNotes();
-        },
+        }
+      });
+
+      const dateSpan = Object.assign(document.createElement("span"), {
+        className: "muted",
+        textContent: note.created
       });
 
       cc.append(ccLabel, ccVal);
-      meta.append(cc, Object.assign(document.createElement("span"), { className: "muted", textContent: "Saved" }));
+      meta.append(cc, dateSpan);
 
       card.append(head, content, meta);
       els.grid.appendChild(card);
     });
 }
 
-/* ========= Helpers ========= */
+/* ========= Buttons ========= */
 function makeButton(icon, title, handler) {
   const btn = document.createElement("button");
   btn.className = "iconbtn";
@@ -310,7 +314,13 @@ function makeButton(icon, title, handler) {
 function duplicateNote(id) {
   const orig = notes.find(n => n.id === id);
   if (!orig) return;
-  const copy = { ...orig, id: Date.now(), title: `${orig.title} (Copy)` };
+
+  const copy = {
+    ...orig,
+    id: Date.now(),
+    created: new Date().toLocaleString()
+  };
+
   notes.unshift(copy);
   saveNotes();
   renderNotes(els.search.value);
@@ -328,9 +338,10 @@ els.form.addEventListener("submit", e => {
   const title = els.title.value.trim();
   if (!title) return;
 
-  const contentHTML = (els.content.value || "")
-    .split(/\r?\n/)
-    .filter(line => line.trim() !== "")
+  const raw = autoCapitalize(els.content.value);
+
+  const htmlContent = raw
+    .split("\n")
     .map(line => `<p>${line}</p>`)
     .join("");
 
@@ -338,9 +349,11 @@ els.form.addEventListener("submit", e => {
     id: Date.now(),
     title,
     cc: els.cc.value.trim(),
-    content: contentHTML,
+    rawContent: raw,
+    content: htmlContent,
     color: colorFor(title),
     cls: pastelClassFor(title),
+    created: new Date().toLocaleString()
   });
 
   saveNotes();
@@ -352,7 +365,7 @@ els.form.addEventListener("submit", e => {
 /* ========= Search ========= */
 els.search.addEventListener("input", e => renderNotes(e.target.value));
 
-/* ========= Setup Datalist ========= */
+/* ========= Datalist Setup ========= */
 PRESETS.forEach(p => {
   const opt = document.createElement("option");
   opt.value = p.title;
@@ -362,6 +375,10 @@ PRESETS.forEach(p => {
 /* ========= Boot ========= */
 renderNotes();
 </script>
+
+
+
+
 
 
 
