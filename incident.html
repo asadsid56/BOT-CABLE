@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Incident Manager</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap">
+<link rel="icon" type="image/png" href="./images/favicon.png">
+<style>
+  :root{
+    --bg: rgba(246,248,250,1);
+    --panel: rgba(255,255,255,0.55);
+    --panel-strong: rgba(255,255,255,0.72);
+    --glass-border: rgba(255,255,255,0.55);
+    --glass-edge: rgba(2,6,23,0.06);
+    --muted:#6b7280;
+    --text:#0f1724;
+    --accent:#238636;
+    --radius:12px;
+    --shadow: 0 8px 30px rgba(2,6,23,0.06);
+    --glass-blur: blur(12px);
+    --prio-p1: rgba(255,224,230,0.45);
+    --prio-p2: rgba(255,250,224,0.45);
+    --prio-p3: rgba(230,240,255,0.45);
+  }
+
+  /* Reset */
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial; background:linear-gradient(180deg,#ebeff3 0%,#f8fafc 100%); color:var(--text); -webkit-font-smoothing:antialiased}
+  a{color:inherit; text-decoration:none}
+
+  /* Floating open button */
+  #openIncidentsBtn{position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:12px; border:none; cursor:pointer; background:linear-gradient(180deg,#fff,#f7f7f7); box-shadow:0 8px 30px rgba(2,6,23,0.08); display:flex; align-items:center; justify-content:center; font-size:22px; z-index:1400}
+  #openIncidentsBtn:hover{transform:translateY(-2px)}
+
+  /* Panel */
+  #incidentPanel{position:fixed; inset:0; right:-120%; width:100%; height:100vh; padding:20px; background:linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0.5)); backdrop-filter:var(--glass-blur); -webkit-backdrop-filter:var(--glass-blur); border-left:1px solid var(--glass-edge); box-shadow:-12px 0 40px rgba(2,6,23,0.06); transition:right .42s cubic-bezier(.22,.9,.32,1); z-index:1300; display:flex; flex-direction:column; gap:12px; overflow-y:auto; -webkit-overflow-scrolling:touch}
+  #incidentPanel.open{right:0}
+
+  .panel-header{display:flex; justify-content:space-between; align-items:center; gap:12px}
+  .panel-header h2{margin:0; font-size:18px; font-weight:600}
+  .subtitle{font-size:13px; color:var(--muted)}
+  #closePanel{background:transparent; border:none; font-size:18px; padding:8px; border-radius:10px; cursor:pointer}
+  #closePanel:hover{background:rgba(0,0,0,0.03)}
+
+  .banner{width:100%; height:72px; object-fit:cover; border-radius:12px; display:block; margin-top:6px}
+
+  /* FORM row */
+  .form-row{display:flex; gap:10px; align-items:center; background:linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0.5)); border:1px solid var(--glass-border); padding:10px; border-radius:12px; backdrop-filter:blur(8px);}
+  .form-field{display:flex; flex-direction:column; gap:6px; min-width:0}
+  .form-field label{font-size:12px; color:var(--muted)}
+
+  /* Inputs sizes */
+  select, input[type="text"], input[type="datetime-local"]{padding:8px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:rgba(255,255,255,0.95); font-size:13px; outline:none}
+
+  .fld-priority{width:72px; flex:0 0 72px}
+  .fld-number{width:160px; flex:0 0 160px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace}
+  .fld-title{flex:1 1 0; min-width:180px}
+  .fld-etr{width:140px; flex:0 0 140px}
+  .fld-status{width:110px; flex:0 0 110px}
+  .form-actions{display:flex; align-items:flex-end}
+  .btn{padding:8px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:rgba(255,255,255,0.92); cursor:pointer}
+  .btn.primary{background:var(--accent); color:#fff; border:none; font-size: larger; margin-top: 20px; width: 40px;}
+  .btn.ghost{background:transparent}
+
+  /* Controls */
+  .controls{display:flex; gap:12px; align-items:center; justify-content:space-between; padding:8px; border-radius:12px; border:1px solid rgba(255,255,255,0.5); background:linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0.5)); backdrop-filter:blur(8px)}
+  .controls .left{display:flex; align-items:center; gap:10px; flex:1}
+  #searchInput{padding:10px 12px; border-radius:10px; border:1px solid rgba(0,0,0,0.06); width:100%; max-width:760px}
+  .controls .center{display:flex; gap:8px; align-items:center; justify-content:center}
+  .controls .right{display:flex; gap:8px; align-items:center}
+  #perPage{padding:8px 10px; border-radius:8px}
+
+  /* List */
+  .list-wrap{display:flex; flex-direction:column; gap:10px}
+  .incident-row{display:flex; gap:12px; align-items:center; padding:10px; border-radius:10px; background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.5)); border:1px solid var(--glass-border); box-shadow:var(--shadow); transition:transform .12s; cursor:default; font-size:13px}
+  .incident-row:hover{transform:translateY(-3px)}
+
+  .col-prio{flex:0 0 72px; text-align:left; font-weight:500}
+  .col-number{flex:0 0 160px; font-family:ui-monospace, Roboto Mono, monospace; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .col-title{flex:1 1 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
+  .col-etr{flex:0 0 140px; text-align:left; color:var(--muted); white-space:nowrap; font-weight:500}
+  .col-status{flex:0 0 110px; display:flex; align-items:center; justify-content:center; height:32px; border-radius:999px; font-weight:600}
+  .col-actions{flex:0 0 86px; display:flex; gap:8px; align-items:center; justify-content:flex-end}
+
+  .icon-btn{border:none; background:transparent; cursor:pointer; padding:6px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center}
+  .icon-btn:hover{background:rgba(0,0,0,0.04)}
+
+  /* editing */
+  .editing{outline:2px solid rgba(35,134,54,0.12); border-radius:8px}
+  .edit-input{padding:8px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:#fff}
+
+  /* empty */
+  .empty{padding:16px; border-radius:10px; color:var(--muted); border:1px dashed rgba(0,0,0,0.06); background:rgba(255,255,255,0.4)}
+
+  /* footer (pagination & info) */
+  .panel-footer{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:6px}
+  .range-info{color:var(--muted); font-size:13px}
+
+  @media (max-width:1000px){.fld-number{width:140px; flex:0 0 140px}.fld-etr{width:130px; flex:0 0 130px}.col-number{flex:0 0 140px}}
+  @media (max-width:720px){.form-row{flex-wrap:wrap}.fld-number,.fld-etr,.fld-status{flex:1 1 45%; min-width:140px}.controls{flex-direction:column}}
+</style>
+</head>
+<body>
+
+
+<aside id="incidentPanel" role="dialog" aria-label="Incidents panel">
+  <div class="panel-header">
+    <div>
+      <h2>Open Incidents</h2>
+      <div class="subtitle">Manage incidents — newest ETR first</div>
+    </div>
+    <div>
+      <a href="./index.html">✖</a>
+    </div>
+  </div>
+
+  <img src="./images/banner.png" alt="banner" class="banner" />
+
+  <!-- FORM: single-line compact -->
+  <section aria-label="Add incident">
+    <div class="form-row" role="group" aria-label="Incident form row">
+      <div class="form-field fld-priority">
+        <label for="priority">Priority</label>
+        <select id="priority" aria-label="Priority">
+          <option value="P1">P1</option>
+          <option value="P2" selected>P2</option>
+          <option value="P3">P3</option>
+        </select>
+      </div>
+
+      <div class="form-field fld-number">
+        <label for="incidentNumber">Incident #</label>
+        <input id="incidentNumber" type="text" placeholder="INC-2025-001" />
+      </div>
+
+      <div class="form-field fld-title">
+        <label for="incidentTitle">Title</label>
+        <input id="incidentTitle" type="text" placeholder="Full title — long titles supported" />
+      </div>
+
+      <div class="form-field fld-etr">
+        <label for="incidentETR">ETR</label>
+        <input id="incidentETR" type="datetime-local" />
+      </div>
+
+      <div class="form-field fld-status">
+        <label for="incidentStatus">Status</label>
+        <select id="incidentStatus">
+          <option>Opened</option>
+          <option>Investigating</option>
+          <option>Closed</option>
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn primary" id="addBtn" type="button">+</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Controls row -->
+  <div class="controls" role="search" aria-label="Controls row">
+    <div class="left">
+      <input id="searchInput" type="search" placeholder="Search number or title…" aria-label="Search incidents" />
+    </div>
+
+    <div class="center">
+      <button class="btn" id="exportJsonBtn" type="button" title="Export JSON">EXPORT</button>
+      <label for="importFile" style="display:inline-block; margin-left:6px;">
+        <input id="importFile" type="file" accept=".json" style="display:none">
+        <button class="btn" id="importBtn" type="button" title="Import JSON">IMPORT</button>
+      </label>
+    </div>
+
+    <div class="right">
+      <label for="perPage" style="color:var(--muted);font-size:13px">PAGE</label>
+      <select id="perPage" title="Per page">
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+      </select>
+      <div style="width:12px"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button id="prevBtn" class="btn ghost small" type="button">Prev</button>
+        <div id="pageButtons" style="display:flex;gap:6px;align-items:center"></div>
+        <button id="nextBtn" class="btn ghost small" type="button">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- List -->
+  <section id="listContainer" class="list-wrap" aria-live="polite">
+    <div id="incidentList" class="incident-list" role="list"></div>
+    <div id="emptyState" class="empty" style="display:none">No incidents yet — add one using the form above.</div>
+  </section>
+
+  <!-- footer: pagination & info (fixed after list) -->
+  <div class="panel-footer">
+    <div id="rangeInfo" class="range-info"></div>
+    <div style="color:var(--muted);font-size:13px">Tip: Single click a row to edit inline — Esc to cancel</div>
+  </div>
+</aside>
+
+<script>
+/* Full working incidents script
+   - Auto-updating countdowns + overdue handling
+   - Inline edit, import/export, pagination, search, copy, delete
+   - Creation date tooltip on hover
+*/
+(function () {
+  const $ = id => document.getElementById(id);
+
+  // Elements
+  const panel = $('incidentPanel');
+  const openBtn = $('openIncidentsBtn');
+  const closeBtn = $('closePanel');
+  const numberInput = $('incidentNumber');
+
+  const priorityEl = $('priority');
+  const titleEl = $('incidentTitle');
+  const etrEl = $('incidentETR');
+  const statusEl = $('incidentStatus');
+
+  const exportBtn = $('exportJsonBtn');
+  const importBtn = $('importBtn');
+  const importFile = $('importFile');
+
+  const searchInput = $('searchInput');
+  const perPageSel = $('perPage');
+  const prevBtn = $('prevBtn');
+  const nextBtn = $('nextBtn');
+  const pageButtons = $('pageButtons');
+
+  const incidentListEl = $('incidentList');
+  const emptyStateEl = $('emptyState');
+  const rangeInfoEl = $('rangeInfo');
+
+  // storage & data
+  const STORAGE_KEY = 'incidents';
+  let incidents = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+  // pagination
+  let currentPage = 1;
+  let perPage = parseInt(perPageSel?.value || 10, 10);
+
+  // track overdue state per id
+  const overdueMap = new Map();
+
+  /* --------------------------- Helpers --------------------------- */
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(incidents));
+  }
+
+  function displayETR(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } catch (e) { return iso; }
+  }
+
+  function displayCreated(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } catch (e) { return iso; }
+  }
+
+  function isOverdue(item) {
+    if (!item || !item.etr) return false;
+    if (item.status === 'Closed') return false;
+    return new Date(item.etr).getTime() < Date.now();
+  }
+
+  function getCountdownText(item) {
+    if (!item || !item.etr) return '';
+    if (item.status === 'Closed') return ''; // no countdown for closed
+    const now = Date.now();
+    const t = new Date(item.etr).getTime();
+    let diff = t - now; 
+    const abs = Math.abs(diff);
+    const minsTotal = Math.floor(abs / 60000);
+    const hrs = Math.floor(minsTotal / 60);
+    const mins = minsTotal % 60;
+    const fmt = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    if (diff > 0) {
+      if (minsTotal < 1) return 'in less than 1m';
+      return `in ${fmt}`;
+    }
+    if (diff > -60000) return 'NOW';
+    return `${fmt} overdue`;
+  }
+
+  function toLocalInputValue(iso) {
+    if(!iso) return '';
+    const dt = new Date(iso);
+    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0,16);
+    return local;
+  }
+
+  /* --------------------------- Panel open / close --------------------------- */
+  if (openBtn) openBtn.addEventListener('click', () => {
+    panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false');
+  });
+  if (closeBtn) {
+    closeBtn.addEventListener('click', ev => {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      panel.classList.remove('open'); panel.setAttribute('aria-hidden', 'true');
+    });
+    const a = closeBtn.querySelector && closeBtn.querySelector('a');
+    if (a) a.addEventListener('click', ev => { ev.preventDefault(); panel.classList.remove('open'); panel.setAttribute('aria-hidden','true'); });
+  }
+
+  /* --------------------------- Add Incident --------------------------- */
+  function clearForm() {
+    if (priorityEl) priorityEl.value = 'P2';
+    if (numberInput) numberInput.value = '';
+    if (titleEl) titleEl.value = '';
+    if (etrEl) etrEl.value = '';
+    if (statusEl) statusEl.value = 'Opened';
+  }
+
+  const addBtn = $('addBtn');
+  if (addBtn) addBtn.addEventListener('click', addIncident);
+
+  function addIncident() {
+    const priority = priorityEl?.value || 'P2';
+    const number = numberInput?.value.trim() || '';
+    const title = titleEl?.value.trim() || '';
+    const etrLocal = etrEl?.value || '';
+    const status = statusEl?.value || 'Opened';
+
+    if (!number || !title || !etrLocal) { alert('Please fill number, title, and ETR.'); return; }
+
+    const iso = new Date(etrLocal).toISOString();
+    const item = {
+      id: Date.now() + Math.floor(Math.random() * 10000),
+      priority, number, title, etr: iso, status,
+      created: new Date().toISOString() // creation date
+    };
+
+    incidents.push(item);
+    save();
+    overdueMap.set(String(item.id), isOverdue(item));
+    currentPage = 1;
+    renderList();
+    clearForm();
+  }
+
+  /* --------------------------- Export / Import --------------------------- */
+  if (exportBtn) exportBtn.addEventListener('click', () => {
+    if (!incidents.length) { alert('No incidents to export'); return; }
+    const blob = new Blob([JSON.stringify(incidents, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `incidents-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  if (importBtn) importBtn.addEventListener('click', () => { if (importFile) importFile.click(); });
+  if (importFile) importFile.addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    try {
+      const text = await f.text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) { alert('Invalid import format'); importFile.value = ''; return; }
+
+      const normalized = parsed.map(a => ({
+        id: a.id || Date.now() + Math.floor(Math.random() * 10000),
+        priority: a.priority || 'P2',
+        number: a.number || '',
+        title: a.title || '',
+        etr: a.etr || new Date().toISOString(),
+        status: a.status || 'Opened',
+        created: a.created || new Date().toISOString()
+      })).filter(i => i.number && i.title && i.etr);
+
+      const replace = confirm('Replace current incidents? Cancel will merge.');
+      if (replace) incidents = normalized;
+      else {
+        normalized.forEach(n => {
+          const exists = incidents.some(i => i.id === n.id || (i.number === n.number && i.etr === n.etr));
+          if (!exists) incidents.push(n);
+        });
+      }
+
+      incidents.forEach(it => overdueMap.set(String(it.id), isOverdue(it)));
+      incidents.sort((a,b)=> new Date(b.etr) - new Date(a.etr));
+      save(); renderList(); importFile.value = ''; alert(`Import successful: ${normalized.length} items.`);
+    } catch (err) { alert('Import failed: ' + err.message); importFile.value = ''; }
+  });
+
+  /* --------------------------- Search / Pagination --------------------------- */
+  if (perPageSel) perPageSel.addEventListener('change', () => { perPage = parseInt(perPageSel.value, 10); currentPage = 1; renderList(); });
+  if (searchInput) searchInput.addEventListener('input', () => { currentPage = 1; renderList(); });
+  if (prevBtn) prevBtn.addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderList(); } });
+  if (nextBtn) nextBtn.addEventListener('click', () => { currentPage++; renderList(); });
+
+  /* --------------------------- Render List --------------------------- */
+  function renderList() {
+    incidents.sort((a, b) => {
+      const aOver = isOverdue(a);
+      const bOver = isOverdue(b);
+      if (aOver && !bOver) return -1;
+      if (bOver && !aOver) return 1;
+      return new Date(b.etr) - new Date(a.etr);
+    });
+
+    const q = (searchInput?.value || '').trim().toLowerCase();
+    const filtered = incidents.filter(i => !q || (i.number + ' ' + i.title + ' ' + i.priority).toLowerCase().includes(q));
+
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+
+    const start = (currentPage - 1) * perPage;
+    const end = Math.min(total, start + perPage);
+    const pageItems = filtered.slice(start, end);
+
+    incidentListEl.innerHTML = '';
+    if (total === 0) {
+      emptyStateEl.style.display = 'block';
+      rangeInfoEl.textContent = '';
+      pageButtons.innerHTML = '';
+      if (prevBtn) prevBtn.disabled = true;
+      if (nextBtn) nextBtn.disabled = true;
+      return;
+    } else emptyStateEl.style.display = 'none';
+
+    pageItems.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'incident-row';
+      row.dataset.id = item.id;
+      row.tabIndex = 0;
+
+      // Tooltip with creation date
+      row.title = item.created ? `Created: ${displayCreated(item.created)}` : '';
+
+      const overdue = isOverdue(item);
+      row.style.background = overdue ? 'rgba(255,0,0,0.12)' : '';
+
+      const colPri = document.createElement('div'); colPri.className = 'col-prio'; colPri.textContent = item.priority;
+      const colNum = document.createElement('div'); colNum.className = 'col-number'; colNum.textContent = item.number;
+      const colTitle = document.createElement('div'); colTitle.className = 'col-title'; colTitle.textContent = item.title;
+
+      const colETR = document.createElement('div'); colETR.className = 'col-etr';
+      const formatted = displayETR(item.etr);
+      const countdownText = getCountdownText(item);
+      colETR.innerHTML = `<div>${formatted}</div><div class="etr-countdown" style="font-size:11px;color:var(--muted)">${countdownText}</div>`;
+
+      const colStatus = document.createElement('div'); colStatus.className = 'col-status'; colStatus.textContent = item.status;
+      if (item.status === 'Opened') { colStatus.style.color = '#ffffff'; colStatus.style.background = '#e53935'; }
+      else if (item.status === 'Investigating') { colStatus.style.color = '#ffffff'; colStatus.style.background = '#fb8c00'; }
+      else { colStatus.style.color = '#ffffff'; colStatus.style.background = '#43a047'; }
+
+      const colActions = document.createElement('div'); colActions.className = 'col-actions';
+      const copyBtn = document.createElement('button'); copyBtn.className = 'icon-btn'; copyBtn.title = 'Copy'; copyBtn.innerHTML = '📋';
+      const delBtn = document.createElement('button'); delBtn.className = 'icon-btn'; delBtn.title = 'Delete'; delBtn.innerHTML = '❌';
+      colActions.appendChild(copyBtn); colActions.appendChild(delBtn);
+
+      row.addEventListener('click', ev => { if (ev.target.closest('.col-actions')) return; enterEditMode(row, item); });
+      row.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); enterEditMode(row, item); } });
+
+      copyBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        navigator.clipboard.writeText(`${item.priority} ${item.number} ${item.title}`)
+          .then(() => { const prev = copyBtn.innerHTML; copyBtn.innerHTML = '✅'; setTimeout(() => copyBtn.innerHTML = prev, 700); })
+          .catch(() => alert('Copy failed'));
+      });
+
+      delBtn.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (!confirm('Delete this incident?')) return;
+        const idx = incidents.findIndex(i => i.id === item.id);
+        if (idx > -1) { incidents.splice(idx, 1); save(); renderList(); }
+      });
+
+      row.appendChild(colPri);
+      row.appendChild(colNum);
+      row.appendChild(colTitle);
+      row.appendChild(colETR);
+      row.appendChild(colStatus);
+      row.appendChild(colActions);
+
+      incidentListEl.appendChild(row);
+    });
+
+    rangeInfoEl.textContent = `Showing ${start+1} - ${end} of ${total} incidents`;
+    if (prevBtn) prevBtn.disabled = currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+
+    // Pagination buttons
+    pageButtons.innerHTML = '';
+    const maxButtons = 7;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = startPage + maxButtons - 1;
+    if (endPage > totalPages) { endPage = totalPages; startPage = Math.max(1, endPage - maxButtons + 1); }
+    for (let p = startPage; p <= endPage; p++) {
+      const b = document.createElement('button'); b.className = 'btn ghost small'; b.textContent = p;
+      if (p === currentPage) { b.style.background = 'var(--accent)'; b.style.color = '#fff'; }
+      b.addEventListener('click', () => { currentPage = p; renderList(); });
+      pageButtons.appendChild(b);
+    }
+  }
+
+  /* --------------------------- Inline edit --------------------------- */
+  function enterEditMode(row, item) {
+    if (row.dataset.edit === '1') return;
+    row.dataset.edit = '1';
+    row.classList.add('editing');
+
+    const colNum = row.querySelector('.col-number');
+    const colTitle = row.querySelector('.col-title');
+    const colETR = row.querySelector('.col-etr');
+    const colStatus = row.querySelector('.col-status');
+    const actions = row.querySelector('.col-actions');
+
+    const inpNum = document.createElement('input'); inpNum.type = 'text'; inpNum.className = 'edit-input'; inpNum.value = item.number;
+    const inpTitle = document.createElement('input'); inpTitle.type = 'text'; inpTitle.className = 'edit-input'; inpTitle.value = item.title; inpTitle.style.width = '100%';
+    const inpETR = document.createElement('input'); inpETR.type = 'datetime-local'; inpETR.className = 'edit-input';
+    inpETR.value = toLocalInputValue(item.etr);
+
+    const selStatus = document.createElement('select'); selStatus.className = 'edit-input';
+    ['Opened', 'Investigating', 'Closed'].forEach(s => {
+      const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === item.status) o.selected = true; selStatus.appendChild(o);
+    });
+
+    colNum.innerHTML = ''; colNum.appendChild(inpNum);
+    colTitle.innerHTML = ''; colTitle.appendChild(inpTitle);
+    colETR.innerHTML = ''; colETR.appendChild(inpETR);
+    colStatus.innerHTML = ''; colStatus.appendChild(selStatus);
+
+    const saveBtn = document.createElement('button'); saveBtn.className = 'icon-btn'; saveBtn.title = 'Save'; saveBtn.innerHTML = '✅';
+    const cancelBtn = document.createElement('button'); cancelBtn.className = 'icon-btn'; cancelBtn.title = 'Cancel'; cancelBtn.innerHTML = '✖';
+    actions.style.visibility = 'visible'; actions.innerHTML = ''; actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
+
+    saveBtn.onclick = () => {
+      const newNum = inpNum.value.trim();
+      const newTitle = inpTitle.value.trim();
+      const newETRVal = inpETR.value;
+      const newStatus = selStatus.value;
+      if (!newNum || !newTitle || !newETRVal) { alert('Number, Title and ETR required'); return; }
+      const iso = new Date(newETRVal).toISOString();
+      const idx = incidents.findIndex(x => x.id === item.id);
+      if (idx > -1) {
+        incidents[idx] = { ...incidents[idx], number: newNum, title: newTitle, etr: iso, status: newStatus };
+        save();
+        overdueMap.set(String(item.id), isOverdue(incidents[idx]));
+        renderList();
+      }
+    };
+
+    cancelBtn.onclick = () => renderList();
+
+    const keyHandler = ev => {
+      if (ev.key === 'Escape') cancelBtn.click();
+      else if (ev.key === 'Enter') saveBtn.click();
+    };
+    row.addEventListener('keydown', keyHandler, { once: true });
+    inpNum.focus();
+  }
+
+  /* --------------------------- Auto-refresh countdown --------------------------- */
+  let tickId = null;
+  function startAutoTick() {
+    if (tickId) clearInterval(tickId);
+    incidents.forEach(it => overdueMap.set(String(it.id), isOverdue(it)));
+
+    tickId = setInterval(() => {
+      const rows = document.querySelectorAll('.incident-row');
+      let shouldRerender = false;
+
+      rows.forEach(row => {
+        const id = row.dataset.id;
+        const item = incidents.find(i => String(i.id) === String(id));
+        if (!item) return;
+
+        const cd = row.querySelector('.etr-countdown');
+        if (cd) cd.textContent = getCountdownText(item);
+
+        const nowOver = isOverdue(item);
+        const prevOver = overdueMap.get(String(id));
+        if (nowOver !== prevOver) {
+          overdueMap.set(String(id), nowOver);
+          shouldRerender = true;
+        }
+
+        row.style.background = nowOver ? 'rgba(255,0,0,0.12)' : '';
+      });
+
+      if (shouldRerender) renderList();
+    }, 1000);
+  }
+
+  /* --------------------------- Storage sync --------------------------- */
+  window.addEventListener('storage', e => {
+    if (e.key === STORAGE_KEY) {
+      try { incidents = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } 
+      catch { incidents = []; }
+      incidents.forEach(it => overdueMap.set(String(it.id), isOverdue(it)));
+      renderList();
+    }
+  });
+
+  /* --------------------------- Key shortcuts --------------------------- */
+  if (numberInput) numberInput.addEventListener('keydown', e => { if (e.key === 'Enter') { titleEl?.focus(); } });
+  if (titleEl) titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { etrEl?.focus(); } });
+
+  /* --------------------------- Init --------------------------- */
+  if (!perPage || isNaN(perPage)) perPage = 10;
+  renderList();
+  startAutoTick();
+
+})();
+</script>
+
+</body>
+</html>

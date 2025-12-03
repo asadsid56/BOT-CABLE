@@ -1,114 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Orange BOT Cable - Asad's Team</title>
-<style>
-  :root{
-    --shadow: 0 8px 30px rgba(0,0,0,.35);
-    --radius: 16px;
-    --blur: saturate(160%) blur(10px);
-  }
-  body.light{
-    --bg:#f6f8fa; --panel: rgba(255,255,255,.7); --panel-border: rgba(27,31,36,.08);
-    --text:#24292f; --muted:#57606a; --card: rgba(255,255,255,.9); --shadow: 0 8px 24px rgba(140,149,159,.2);
-  }
-  *{box-sizing:border-box}
-  body{
-    margin:0;background: radial-gradient(1200px 1200px at 10% -10%, rgba(56,189,248,.08), transparent),
-                         radial-gradient(1000px 1000px at 110% 10%, rgba(168,85,247,.08), transparent),
-                         var(--bg);
-    color:var(--text); font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
-    min-height:100svh;
-  }
-  .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
-  header{
-    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-    background: var(--panel); border:1px solid var(--panel-border);
-    border-radius: var(--radius); box-shadow: var(--shadow);
-    padding:14px; display:flex; gap:12px; align-items:center; justify-content:space-between;
-    position: sticky; top:16px; z-index: 10;
-  }
-  .brand{display:flex; gap:10px; align-items:center; font-weight:700}
-  .brand span{opacity:.8}
-  .controls{display:flex; gap:10px; align-items:center; width: 100%}
-  .controls input[type="search"]{
-    flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--panel-border);
-    background: var(--card); color:var(--text); outline:none;
-  }
-  .controls button{
-    padding:10px 12px; border-radius:10px; border:1px solid var(--panel-border);
-    background: var(--card); color:var(--text); cursor:pointer;
-  }
-  /* Add form */
-  #noteForm{
-    display:none; margin:14px 0 0;
-    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
-    background: var(--panel); border:1px solid var(--panel-border);
-    border-radius: var(--radius); box-shadow: var(--shadow);
-    padding:12px; display:none; gap:10px; flex-wrap:wrap;
-  }
-  #noteForm .row{display:flex; gap:10px; width:100%; flex-wrap:wrap}
-  #noteForm input, #noteForm textarea, #noteForm button{
-    padding:10px 12px; border-radius:10px; border:1px solid var(--panel-border);
-    background: var(--card); color:var(--text); outline:none;
-  }
-  #noteTitle{flex:2} #noteCC{flex:1} #noteContent{flex:1 1 100%; min-height:70px; resize:vertical}
-  #noteForm button[type="submit"]{background:linear-gradient(180deg,#238636,#1a7f37); border-color:#2ea043; color:#fff}
-  /* Grid */
-  #notesGrid{display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:14px; margin-top:14px}
-  .card{
-    background: var(--card); border:1px solid var(--panel-border);
-    border-radius: 18px; box-shadow: var(--shadow); padding:14px;
-    display:flex; flex-direction:column; gap:10px; min-height:150px; position:relative; overflow:hidden;
-  }
-  .card::before{content:""; position:absolute; inset:0; background: var(--pastel,#fff3); z-index:0}
-  .card > * {position:relative; z-index:1}
-  .card .head{display:flex; justify-content:space-between; gap:8px; align-items:flex-start}
-  .title{font-weight:700; font-size:1.05rem}
-  .actions{display:flex; gap:6px}
-  .iconbtn{
-    background: transparent; border:1px solid var(--panel-border); color:var(--muted);
-    padding:6px 8px; border-radius:10px; cursor:pointer;
-  }
-  .iconbtn:hover{color:var(--text)}
-  .content{min-height:54px; outline:none; border-radius:10px; padding:6px}
-  .meta{display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:.9rem}
-  .cc{display:flex; gap:6px; align-items:center}
-  .cc span[contenteditable]{outline: none; padding:2px 6px; border-radius:8px}
-  .cc span[contenteditable]:focus{background: rgba(255,255,255,.15)}
-  /* Pastel token backgrounds per title */
-  .p-internet-down{--pastel:#ffe5e599}
-  .p-internet-quality{--pastel:#fff2e599}
-  .p-wifi{--pastel:#fffde599}
-  .p-tv-down{--pastel:#f0e5ff99}
-  .p-tv-quality{--pastel:#f5e5d699}
-  .p-orange-tv-plus-app{--pastel:#e5ffe599}
-  .p-repair{--pastel:#e5f0ff99}
-  .p-ingress{--pastel:#e5e5e599}
-  .p-drop-quotation-marks{--pastel:#f9f9f999}
-  /* small helpers */
-  .muted{color:var(--muted)}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/png" href="./images/favicon.png">
+  <title>Orange BOT Cable - Asad's Team</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="dark">
+
+<body>
+  <nav class="navbar glass-nav">
+  <div class="nav-left">
+    <img src="./images/logo.png" alt="Logo" class="nav-logo" />
+    <span class="nav-title">My Notes</span>
+  </div>
+
+  <div class="nav-right">
+    <button id="exportBtn" class="glass-button">Export</button>
+    <button id="importBtn" class="glass-button">Import</button>
+    <a href="incident.html"><button class="glass-button">Incident</button></a>
+    <input type="file" id="importFile" accept="application/json" hidden />
+
+    <a href="dashboard.html" class="glass-link">
+      Dashboard
+    </a>
+  </div>
+</nav>
+
+
   <div class="wrap">
     <header>
-      <div class="brand">📒 <span>BOT Cable</span></div>
       <div class="controls">
         <input id="search" type="search" placeholder="Search notes…" />
-        <button id="showForm" title="Add note">➕ Add Note</button>
+        <button id="showForm" title="Add note" class="glass-button">➕ Add Note</button>
       </div>
     </header>
-
     <form id="noteForm" autocomplete="off">
       <div class="row">
         <input id="noteCC" placeholder="CC (Customer Code)" />
         <input id="noteTitle" list="presetTitles" placeholder="Case (choose or type…)" required />
       </div>
       <div class="row">
-        <textarea id="noteContent" placeholder="Content (optional)…"></textarea>
+        <textarea id="noteContent" placeholder="Content"></textarea>
       </div>
       <div class="row" style="justify-content:flex-end">
         <button type="submit">Save Note</button>
@@ -119,269 +53,11 @@
     <main id="notesGrid" aria-live="polite"></main>
   </div>
 
-<script>
-/* ========= Constants & DOM Elements ========= */
-const els = {
-  grid: document.getElementById("notesGrid"),
-  search: document.getElementById("search"),
-  showForm: document.getElementById("showForm"),
-  form: document.getElementById("noteForm"),
-  title: document.getElementById("noteTitle"),
-  cc: document.getElementById("noteCC"),
-  content: document.getElementById("noteContent"),
-  datalist: document.getElementById("presetTitles"),
-};
-
-let notes = JSON.parse(localStorage.getItem("notes_v1")) || [];
-
-/* ========= Presets ========= */
-const PRESETS = [
-  { title: "Internet Down", color: "#ffe5e5", cls: "p-internet-down" },
-  { title: "Internet Quality", color: "#fff2e5", cls: "p-internet-quality" },
-  { title: "Wifi", color: "#fffde5", cls: "p-wifi" },
-  { title: "TV Down", color: "#f0e5ff", cls: "p-tv-down" },
-  { title: "TV Quality", color: "#f5e5d6", cls: "p-tv-quality" },
-  { title: "Orange TV Plus App", color: "#e5ffe5", cls: "p-orange-tv-plus-app" },
-  { title: "Repair", color: "#e5f0ff", cls: "p-repair" },
-  { title: "Ingress", color: "#e5e5e5", cls: "p-ingress" },
-  { title: "Drop quotation", color: "#f9f9f9", cls: "p-drop-quotation-marks" }
-];
-
-const COLOR_MAP = Object.fromEntries(PRESETS.map(p => [p.title.toLowerCase(), p.color]));
-const CLASS_MAP = Object.fromEntries(PRESETS.map(p => [p.title.toLowerCase(), p.cls]));
-
-/* ========= Utilities ========= */
-const saveNotes = () => localStorage.setItem("notes_v1", JSON.stringify(notes));
-
-const colorFor = (title = "") => COLOR_MAP[title.toLowerCase()] || "#f9f9f9";
-const pastelClassFor = (title = "") => CLASS_MAP[title.toLowerCase()] || "";
-
-/* ========= Auto-capitalize ========= */
-function autoCapitalize(text) {
-  return text.replace(/(^\s*\w|[.!?]\s*\w)/g, m => m.toUpperCase());
-}
-
-/* ========= Ensure date ========= */
-function ensureCreatedDate(note) {
-  if (!note.created) {
-    note.created = new Date().toLocaleString();
-  }
-}
-
-/* ========= First-time Seed ========= */
-if (notes.length === 0) {
-  notes = PRESETS.map((p, i) => ({
-    id: Date.now() + i,
-    title: p.title,
-    cc: "",
-    content: "",
-    rawContent: "",
-    color: p.color,
-    cls: p.cls,
-    created: new Date().toLocaleString()
-  }));
-  saveNotes();
-}
-
-/* ========= Copy Popup ========= */
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    const msg = document.createElement("div");
-    msg.textContent = "Copied!";
-    Object.assign(msg.style, {
-      position: "fixed", bottom: "20px", right: "20px",
-      background: "#238636", color: "#fff",
-      padding: "8px 14px", borderRadius: "10px",
-      boxShadow: "0 4px 12px rgba(0,0,0,.3)",
-      zIndex: 9999, fontSize: "14px", transition: "opacity .3s ease"
-    });
-    document.body.appendChild(msg);
-    setTimeout(() => (msg.style.opacity = "0"), 800);
-    setTimeout(() => msg.remove(), 1200);
-  });
-}
-
-/* ========= Rendering ========= */
-function renderNotes(filter = "") {
-  els.grid.innerHTML = "";
-  const q = filter.trim().toLowerCase();
-
-  notes
-    .filter(n => !q || n.title.toLowerCase().includes(q) || (n.rawContent || "").toLowerCase().includes(q))
-    .forEach(note => {
-
-      ensureCreatedDate(note);
-
-      const card = document.createElement("article");
-      card.className = `card ${note.cls || pastelClassFor(note.title)}`;
-      card.style.setProperty("--pastel", (note.color || colorFor(note.title)) + "99");
-
-      /* ----- Header ----- */
-      const head = document.createElement("div");
-      head.className = "head";
-
-      const title = Object.assign(document.createElement("div"), {
-        className: "title",
-        textContent: `Case : ${note.title}`,
-        spellcheck: false
-      });
-
-      /* ----- Actions ----- */
-      const actions = document.createElement("div");
-      actions.className = "actions";
-
-      const copyBtn = makeButton("📋", "Copy note", () => {
-        const textToCopy =
-          `Case : ${note.title}\nCC: ${note.cc || "-"}\n\n` +
-          (note.rawContent || "");
-        copyToClipboard(textToCopy);
-      });
-
-      const dup = makeButton("📄", "Duplicate", () => duplicateNote(note.id));
-
-      const del = makeButton("🗑️", "Delete", () => {
-        if (confirm("Delete this note?")) {
-          notes = notes.filter(n => n.id !== note.id);
-          saveNotes();
-          renderNotes(q);
-        }
-      });
-
-      actions.append(copyBtn, dup, del);
-      head.append(title, actions);
-
-      /* ----- Content (editable) ----- */
-      const content = Object.assign(document.createElement("textarea"), {
-        className: "content",
-        spellcheck: false,
-        value: note.rawContent,
-        oninput: () => {
-          note.rawContent = autoCapitalize(content.value);
-
-          note.content = note.rawContent
-            .split("\n")
-            .map(line => line === "" ? "<br>" : `<p>${line}</p>`)
-            .join("");
-
-          saveNotes();
-        }
-      });
-
-      /* ----- Meta (CC + Date) ----- */
-      const meta = document.createElement("div");
-      meta.className = "meta";
-
-      const cc = document.createElement("div");
-      cc.className = "cc";
-
-      const ccLabel = Object.assign(document.createElement("span"), {
-        className: "muted",
-        textContent: "CC:"
-      });
-
-      const ccVal = Object.assign(document.createElement("span"), {
-        contentEditable: true,
-        textContent: note.cc,
-        oninput: () => {
-          note.cc = ccVal.textContent.trim();
-          saveNotes();
-        }
-      });
-
-      const dateSpan = Object.assign(document.createElement("span"), {
-        className: "muted",
-        textContent: note.created
-      });
-
-      cc.append(ccLabel, ccVal);
-      meta.append(cc, dateSpan);
-
-      card.append(head, content, meta);
-      els.grid.appendChild(card);
-    });
-}
-
-/* ========= Buttons ========= */
-function makeButton(icon, title, handler) {
-  const btn = document.createElement("button");
-  btn.className = "iconbtn";
-  btn.title = title;
-  btn.textContent = icon;
-  btn.onclick = handler;
-  return btn;
-}
-
-function duplicateNote(id) {
-  const orig = notes.find(n => n.id === id);
-  if (!orig) return;
-
-  const copy = {
-    ...orig,
-    id: Date.now(),
-    created: new Date().toLocaleString()
-  };
-
-  notes.unshift(copy);
-  saveNotes();
-  renderNotes(els.search.value);
-}
-
-/* ========= Form Handling ========= */
-els.showForm.addEventListener("click", () => {
-  const visible = els.form.style.display === "flex";
-  els.form.style.display = visible ? "none" : "flex";
-  if (!visible) els.title.focus();
-});
-
-els.form.addEventListener("submit", e => {
-  e.preventDefault();
-  const title = els.title.value.trim();
-  if (!title) return;
-
-  const raw = autoCapitalize(els.content.value);
-
-  const htmlContent = raw
-    .split("\n")
-    .map(line => `<p>${line}</p>`)
-    .join("");
-
-  notes.unshift({
-    id: Date.now(),
-    title,
-    cc: els.cc.value.trim(),
-    rawContent: raw,
-    content: htmlContent,
-    color: colorFor(title),
-    cls: pastelClassFor(title),
-    created: new Date().toLocaleString()
-  });
-
-  saveNotes();
-  renderNotes(els.search.value);
-  els.form.reset();
-  els.form.style.display = "none";
-});
-
-/* ========= Search ========= */
-els.search.addEventListener("input", e => renderNotes(e.target.value));
-
-/* ========= Datalist Setup ========= */
-PRESETS.forEach(p => {
-  const opt = document.createElement("option");
-  opt.value = p.title;
-  els.datalist.appendChild(opt);
-});
-
-/* ========= Boot ========= */
-renderNotes();
-</script>
 
 
-
-
-
-
-
+<!-- Your notes JS remains the same as before -->
+<script src="app.js"></script>
 
 </body>
+
 </html>
