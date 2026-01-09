@@ -76,6 +76,18 @@
   .incident-row{display:flex; gap:12px; align-items:center; padding:10px; border-radius:10px; background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.5)); border:1px solid var(--glass-border); box-shadow:var(--shadow); transition:transform .12s; cursor:default; font-size:13px}
   .incident-row:hover{transform:translateY(-3px)}
 
+   /* Animation */
+
+   /* New incident pop-in animation */
+@keyframes rowPop {
+  0% { transform: translateY(-6px) scale(.98); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.incident-row.is-new {
+  animation: rowPop 260ms cubic-bezier(.2,.9,.2,1);
+}
+
+
   .col-prio{flex:0 0 72px; text-align:left; font-weight:500}
   .col-number{flex:0 0 160px; font-family:ui-monospace, Roboto Mono, monospace; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .col-title{flex:1 1 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
@@ -172,20 +184,8 @@
         <button class="btn" id="importBtn" type="button" title="Import JSON">IMPORT</button>
       </label>
     </div>
-
     <div class="right">
-      <label for="perPage" style="color:var(--muted);font-size:13px">PAGE</label>
-      <select id="perPage" title="Per page">
-        <option value="10">10</option>
-        <option value="25">25</option>
-        <option value="50">50</option>
-      </select>
-      <div style="width:12px"></div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <button id="prevBtn" class="btn ghost small" type="button">Prev</button>
-        <div id="pageButtons" style="display:flex;gap:6px;align-items:center"></div>
-        <button id="nextBtn" class="btn ghost small" type="button">Next</button>
-      </div>
+      <div id="rangeInfo" class="range-info"></div>
     </div>
   </div>
 
@@ -197,55 +197,53 @@
 
   <!-- footer: pagination & info (fixed after list) -->
   <div class="panel-footer">
-    <div id="rangeInfo" class="range-info"></div>
-    <div style="color:var(--muted);font-size:13px">Tip: Single click a row to edit inline — Esc to cancel</div>
-  </div>
+  <div style="color:var(--muted);font-size:13px">Tip: Single click a row to edit inline — Esc to cancel</div>
+</div>
+
 </aside>
 
 <script>
-/* Full working incidents script
+/* Incidents script (no pagination)
    - Auto-updating countdowns + overdue handling
-   - Inline edit, import/export, pagination, search, copy, delete
+   - Inline edit, import/export, search, copy, delete
    - Creation date tooltip on hover
+   - Mini animation when a new incident is created/imported
 */
 (function () {
-  const $ = id => document.getElementById(id);
+  const $ = (id) => document.getElementById(id);
 
   // Elements
   const panel = $('incidentPanel');
   const openBtn = $('openIncidentsBtn');
   const closeBtn = $('closePanel');
-  const numberInput = $('incidentNumber');
 
   const priorityEl = $('priority');
+  const numberInput = $('incidentNumber');
   const titleEl = $('incidentTitle');
   const etrEl = $('incidentETR');
   const statusEl = $('incidentStatus');
+
+  const addBtn = $('addBtn');
 
   const exportBtn = $('exportJsonBtn');
   const importBtn = $('importBtn');
   const importFile = $('importFile');
 
   const searchInput = $('searchInput');
-  const perPageSel = $('perPage');
-  const prevBtn = $('prevBtn');
-  const nextBtn = $('nextBtn');
-  const pageButtons = $('pageButtons');
 
   const incidentListEl = $('incidentList');
   const emptyStateEl = $('emptyState');
   const rangeInfoEl = $('rangeInfo');
 
-  // storage & data
+  // Storage
   const STORAGE_KEY = 'incidents';
   let incidents = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 
-  // pagination
-  let currentPage = 1;
-  let perPage = parseInt(perPageSel?.value || 10, 10);
-
-  // track overdue state per id
+  // Track overdue state per id
   const overdueMap = new Map();
+
+  // Track "new" rows to animate once
+  let flashNewIds = new Set();
 
   /* --------------------------- Helpers --------------------------- */
   function save() {
@@ -262,7 +260,9 @@
       const hours = String(d.getHours()).padStart(2, '0');
       const minutes = String(d.getMinutes()).padStart(2, '0');
       return `${day}/${month}/${year} ${hours}:${minutes}`;
-    } catch (e) { return iso; }
+    } catch (e) {
+      return iso;
+    }
   }
 
   function displayCreated(iso) {
@@ -275,7 +275,9 @@
       const hours = String(d.getHours()).padStart(2, '0');
       const minutes = String(d.getMinutes()).padStart(2, '0');
       return `${day}/${month}/${year} ${hours}:${minutes}`;
-    } catch (e) { return iso; }
+    } catch (e) {
+      return iso;
+    }
   }
 
   function isOverdue(item) {
@@ -286,15 +288,18 @@
 
   function getCountdownText(item) {
     if (!item || !item.etr) return '';
-    if (item.status === 'Closed') return ''; // no countdown for closed
+    if (item.status === 'Closed') return '';
+
     const now = Date.now();
     const t = new Date(item.etr).getTime();
-    let diff = t - now; 
+    const diff = t - now;
+
     const abs = Math.abs(diff);
     const minsTotal = Math.floor(abs / 60000);
     const hrs = Math.floor(minsTotal / 60);
     const mins = minsTotal % 60;
     const fmt = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+
     if (diff > 0) {
       if (minsTotal < 1) return 'in less than 1m';
       return `in ${fmt}`;
@@ -304,23 +309,57 @@
   }
 
   function toLocalInputValue(iso) {
-    if(!iso) return '';
+    if (!iso) return '';
     const dt = new Date(iso);
-    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0,16);
-    return local;
+    return new Date(dt.getTime() - dt.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+  }
+
+  function scrollRowIntoView(row) {
+  if (!row) return;
+  row.scrollIntoView({
+    behavior: 'smooth',
+    block: 'nearest'
+  });
+}
+
+
+  function normalizeItem(a) {
+    return {
+      id: a.id || Date.now() + Math.floor(Math.random() * 10000),
+      priority: a.priority || 'P2',
+      number: a.number || '',
+      title: a.title || '',
+      etr: a.etr || new Date().toISOString(),
+      status: a.status || 'Opened',
+      created: a.created || new Date().toISOString(),
+    };
   }
 
   /* --------------------------- Panel open / close --------------------------- */
-  if (openBtn) openBtn.addEventListener('click', () => {
-    panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false');
-  });
-  if (closeBtn) {
-    closeBtn.addEventListener('click', ev => {
-      if (ev && ev.preventDefault) ev.preventDefault();
-      panel.classList.remove('open'); panel.setAttribute('aria-hidden', 'true');
+  if (openBtn) {
+    openBtn.addEventListener('click', () => {
+      panel.classList.add('open');
+      panel.setAttribute('aria-hidden', 'false');
     });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (ev) => {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      panel.classList.remove('open');
+      panel.setAttribute('aria-hidden', 'true');
+    });
+
     const a = closeBtn.querySelector && closeBtn.querySelector('a');
-    if (a) a.addEventListener('click', ev => { ev.preventDefault(); panel.classList.remove('open'); panel.setAttribute('aria-hidden','true'); });
+    if (a) {
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        panel.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+      });
+    }
   }
 
   /* --------------------------- Add Incident --------------------------- */
@@ -332,7 +371,6 @@
     if (statusEl) statusEl.value = 'Opened';
   }
 
-  const addBtn = $('addBtn');
   if (addBtn) addBtn.addEventListener('click', addIncident);
 
   function addIncident() {
@@ -342,76 +380,109 @@
     const etrLocal = etrEl?.value || '';
     const status = statusEl?.value || 'Opened';
 
-    if (!number || !title || !etrLocal) { alert('Please fill number, title, and ETR.'); return; }
+    if (!number || !title || !etrLocal) {
+      alert('Please fill number, title, and ETR.');
+      return;
+    }
 
     const iso = new Date(etrLocal).toISOString();
     const item = {
       id: Date.now() + Math.floor(Math.random() * 10000),
-      priority, number, title, etr: iso, status,
-      created: new Date().toISOString() // creation date
+      priority,
+      number,
+      title,
+      etr: iso,
+      status,
+      created: new Date().toISOString(),
     };
 
     incidents.push(item);
+    flashNewIds.add(String(item.id));
     save();
     overdueMap.set(String(item.id), isOverdue(item));
-    currentPage = 1;
+
+    // Animate the new row once
+    flashNewIds.add(String(item.id));
+
     renderList();
+
+    // Optional: scroll to top so user sees it immediately (since newest ETR first + overdue first)
+    // incidentListEl?.firstElementChild?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
     clearForm();
   }
 
   /* --------------------------- Export / Import --------------------------- */
-  if (exportBtn) exportBtn.addEventListener('click', () => {
-    if (!incidents.length) { alert('No incidents to export'); return; }
-    const blob = new Blob([JSON.stringify(incidents, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `incidents-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  });
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      if (!incidents.length) {
+        alert('No incidents to export');
+        return;
+      }
+      const blob = new Blob([JSON.stringify(incidents, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `incidents-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
 
   if (importBtn) importBtn.addEventListener('click', () => { if (importFile) importFile.click(); });
-  if (importFile) importFile.addEventListener('change', async e => {
-    const f = e.target.files && e.target.files[0]; if (!f) return;
-    try {
-      const text = await f.text();
-      const parsed = JSON.parse(text);
-      if (!Array.isArray(parsed)) { alert('Invalid import format'); importFile.value = ''; return; }
 
-      const normalized = parsed.map(a => ({
-        id: a.id || Date.now() + Math.floor(Math.random() * 10000),
-        priority: a.priority || 'P2',
-        number: a.number || '',
-        title: a.title || '',
-        etr: a.etr || new Date().toISOString(),
-        status: a.status || 'Opened',
-        created: a.created || new Date().toISOString()
-      })).filter(i => i.number && i.title && i.etr);
+  if (importFile) {
+    importFile.addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
 
-      const replace = confirm('Replace current incidents? Cancel will merge.');
-      if (replace) incidents = normalized;
-      else {
-        normalized.forEach(n => {
-          const exists = incidents.some(i => i.id === n.id || (i.number === n.number && i.etr === n.etr));
-          if (!exists) incidents.push(n);
-        });
+      try {
+        const text = await f.text();
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed)) {
+          alert('Invalid import format');
+          importFile.value = '';
+          return;
+        }
+
+        const normalized = parsed
+          .map(normalizeItem)
+          .filter((i) => i.number && i.title && i.etr);
+
+        const replace = confirm('Replace current incidents? Cancel will merge.');
+        if (replace) {
+          incidents = normalized;
+        } else {
+          normalized.forEach((n) => {
+            const exists = incidents.some((i) => i.id === n.id || (i.number === n.number && i.etr === n.etr));
+            if (!exists) incidents.push(n);
+          });
+        }
+
+        // Animate imported rows once
+        flashNewIds = new Set(normalized.map((x) => String(x.id)));
+
+        incidents.forEach((it) => overdueMap.set(String(it.id), isOverdue(it)));
+        incidents.sort((a, b) => new Date(b.etr) - new Date(a.etr));
+
+        save();
+        renderList();
+
+        importFile.value = '';
+        alert(`Import successful: ${normalized.length} items.`);
+      } catch (err) {
+        alert('Import failed: ' + err.message);
+        importFile.value = '';
       }
+    });
+  }
 
-      incidents.forEach(it => overdueMap.set(String(it.id), isOverdue(it)));
-      incidents.sort((a,b)=> new Date(b.etr) - new Date(a.etr));
-      save(); renderList(); importFile.value = ''; alert(`Import successful: ${normalized.length} items.`);
-    } catch (err) { alert('Import failed: ' + err.message); importFile.value = ''; }
-  });
+  /* --------------------------- Search --------------------------- */
+  if (searchInput) searchInput.addEventListener('input', () => renderList());
 
-  /* --------------------------- Search / Pagination --------------------------- */
-  if (perPageSel) perPageSel.addEventListener('change', () => { perPage = parseInt(perPageSel.value, 10); currentPage = 1; renderList(); });
-  if (searchInput) searchInput.addEventListener('input', () => { currentPage = 1; renderList(); });
-  if (prevBtn) prevBtn.addEventListener('click', () => { if (currentPage > 1) { currentPage--; renderList(); } });
-  if (nextBtn) nextBtn.addEventListener('click', () => { currentPage++; renderList(); });
-
-  /* --------------------------- Render List --------------------------- */
+  /* --------------------------- Render List (NO pagination) --------------------------- */
   function renderList() {
+    // Sort overdue first, then newest ETR
     incidents.sort((a, b) => {
       const aOver = isOverdue(a);
       const bOver = isOverdue(b);
@@ -421,28 +492,22 @@
     });
 
     const q = (searchInput?.value || '').trim().toLowerCase();
-    const filtered = incidents.filter(i => !q || (i.number + ' ' + i.title + ' ' + i.priority).toLowerCase().includes(q));
-
-    const total = filtered.length;
-    const totalPages = Math.max(1, Math.ceil(total / perPage));
-    if (currentPage > totalPages) currentPage = totalPages;
-    if (currentPage < 1) currentPage = 1;
-
-    const start = (currentPage - 1) * perPage;
-    const end = Math.min(total, start + perPage);
-    const pageItems = filtered.slice(start, end);
+    const filtered = incidents.filter((i) => {
+      if (!q) return true;
+      return (i.number + ' ' + i.title + ' ' + i.priority).toLowerCase().includes(q);
+    });
 
     incidentListEl.innerHTML = '';
-    if (total === 0) {
-      emptyStateEl.style.display = 'block';
-      rangeInfoEl.textContent = '';
-      pageButtons.innerHTML = '';
-      if (prevBtn) prevBtn.disabled = true;
-      if (nextBtn) nextBtn.disabled = true;
-      return;
-    } else emptyStateEl.style.display = 'none';
 
-    pageItems.forEach(item => {
+    if (!filtered.length) {
+      emptyStateEl.style.display = 'block';
+      if (rangeInfoEl) rangeInfoEl.textContent = '';
+      return;
+    } else {
+      emptyStateEl.style.display = 'none';
+    }
+
+    filtered.forEach((item) => {
       const row = document.createElement('div');
       row.className = 'incident-row';
       row.dataset.id = item.id;
@@ -454,40 +519,97 @@
       const overdue = isOverdue(item);
       row.style.background = overdue ? 'rgba(255,0,0,0.12)' : '';
 
-      const colPri = document.createElement('div'); colPri.className = 'col-prio'; colPri.textContent = item.priority;
-      const colNum = document.createElement('div'); colNum.className = 'col-number'; colNum.textContent = item.number;
-      const colTitle = document.createElement('div'); colTitle.className = 'col-title'; colTitle.textContent = item.title;
+      // Mini animation for newly created/imported incidents
+      if (flashNewIds.has(String(item.id))) {
+      row.classList.add('is-new');
+      // auto-scroll to the newly created incident
+      requestAnimationFrame(() => scrollRowIntoView(row));
+      setTimeout(() => flashNewIds.delete(String(item.id)), 600);
+}
 
-      const colETR = document.createElement('div'); colETR.className = 'col-etr';
+
+      const colPri = document.createElement('div');
+      colPri.className = 'col-prio';
+      colPri.textContent = item.priority;
+
+      const colNum = document.createElement('div');
+      colNum.className = 'col-number';
+      colNum.textContent = item.number;
+
+      const colTitle = document.createElement('div');
+      colTitle.className = 'col-title';
+      colTitle.textContent = item.title;
+
+      const colETR = document.createElement('div');
+      colETR.className = 'col-etr';
       const formatted = displayETR(item.etr);
       const countdownText = getCountdownText(item);
       colETR.innerHTML = `<div>${formatted}</div><div class="etr-countdown" style="font-size:11px;color:var(--muted)">${countdownText}</div>`;
 
-      const colStatus = document.createElement('div'); colStatus.className = 'col-status'; colStatus.textContent = item.status;
-      if (item.status === 'Opened') { colStatus.style.color = '#ffffff'; colStatus.style.background = '#e53935'; }
-      else if (item.status === 'Investigating') { colStatus.style.color = '#ffffff'; colStatus.style.background = '#fb8c00'; }
-      else { colStatus.style.color = '#ffffff'; colStatus.style.background = '#43a047'; }
+      const colStatus = document.createElement('div');
+      colStatus.className = 'col-status';
+      colStatus.textContent = item.status;
 
-      const colActions = document.createElement('div'); colActions.className = 'col-actions';
-      const copyBtn = document.createElement('button'); copyBtn.className = 'icon-btn'; copyBtn.title = 'Copy'; copyBtn.innerHTML = '📋';
-      const delBtn = document.createElement('button'); delBtn.className = 'icon-btn'; delBtn.title = 'Delete'; delBtn.innerHTML = '❌';
-      colActions.appendChild(copyBtn); colActions.appendChild(delBtn);
+      if (item.status === 'Opened') {
+        colStatus.style.color = '#ffffff';
+        colStatus.style.background = '#e53935';
+      } else if (item.status === 'Investigating') {
+        colStatus.style.color = '#ffffff';
+        colStatus.style.background = '#fb8c00';
+      } else {
+        colStatus.style.color = '#ffffff';
+        colStatus.style.background = '#43a047';
+      }
 
-      row.addEventListener('click', ev => { if (ev.target.closest('.col-actions')) return; enterEditMode(row, item); });
-      row.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); enterEditMode(row, item); } });
+      const colActions = document.createElement('div');
+      colActions.className = 'col-actions';
 
-      copyBtn.addEventListener('click', ev => {
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'icon-btn';
+      copyBtn.title = 'Copy';
+      copyBtn.innerHTML = '📋';
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'icon-btn';
+      delBtn.title = 'Delete';
+      delBtn.innerHTML = '❌';
+
+      colActions.appendChild(copyBtn);
+      colActions.appendChild(delBtn);
+
+      row.addEventListener('click', (ev) => {
+        if (ev.target.closest('.col-actions')) return;
+        enterEditMode(row, item);
+      });
+
+      row.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          enterEditMode(row, item);
+        }
+      });
+
+      copyBtn.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        navigator.clipboard.writeText(`${item.priority} ${item.number} ${item.title}`)
-          .then(() => { const prev = copyBtn.innerHTML; copyBtn.innerHTML = '✅'; setTimeout(() => copyBtn.innerHTML = prev, 700); })
+        navigator.clipboard
+          .writeText(`${item.priority} ${item.number} ${item.title}`)
+          .then(() => {
+            const prev = copyBtn.innerHTML;
+            copyBtn.innerHTML = '✅';
+            setTimeout(() => (copyBtn.innerHTML = prev), 700);
+          })
           .catch(() => alert('Copy failed'));
       });
 
-      delBtn.addEventListener('click', ev => {
+      delBtn.addEventListener('click', (ev) => {
         ev.stopPropagation();
         if (!confirm('Delete this incident?')) return;
-        const idx = incidents.findIndex(i => i.id === item.id);
-        if (idx > -1) { incidents.splice(idx, 1); save(); renderList(); }
+        const idx = incidents.findIndex((i) => i.id === item.id);
+        if (idx > -1) {
+          incidents.splice(idx, 1);
+          save();
+          renderList();
+        }
       });
 
       row.appendChild(colPri);
@@ -500,21 +622,9 @@
       incidentListEl.appendChild(row);
     });
 
-    rangeInfoEl.textContent = `Showing ${start+1} - ${end} of ${total} incidents`;
-    if (prevBtn) prevBtn.disabled = currentPage <= 1;
-    if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
-
-    // Pagination buttons
-    pageButtons.innerHTML = '';
-    const maxButtons = 7;
-    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-    let endPage = startPage + maxButtons - 1;
-    if (endPage > totalPages) { endPage = totalPages; startPage = Math.max(1, endPage - maxButtons + 1); }
-    for (let p = startPage; p <= endPage; p++) {
-      const b = document.createElement('button'); b.className = 'btn ghost small'; b.textContent = p;
-      if (p === currentPage) { b.style.background = 'var(--accent)'; b.style.color = '#fff'; }
-      b.addEventListener('click', () => { currentPage = p; renderList(); });
-      pageButtons.appendChild(b);
+    if (rangeInfoEl) {
+      const total = filtered.length;
+      rangeInfoEl.textContent = `Showing ${total} incident${total === 1 ? '' : 's'}`;
     }
   }
 
@@ -530,33 +640,72 @@
     const colStatus = row.querySelector('.col-status');
     const actions = row.querySelector('.col-actions');
 
-    const inpNum = document.createElement('input'); inpNum.type = 'text'; inpNum.className = 'edit-input'; inpNum.value = item.number;
-    const inpTitle = document.createElement('input'); inpTitle.type = 'text'; inpTitle.className = 'edit-input'; inpTitle.value = item.title; inpTitle.style.width = '100%';
-    const inpETR = document.createElement('input'); inpETR.type = 'datetime-local'; inpETR.className = 'edit-input';
+    const inpNum = document.createElement('input');
+    inpNum.type = 'text';
+    inpNum.className = 'edit-input';
+    inpNum.value = item.number;
+
+    const inpTitle = document.createElement('input');
+    inpTitle.type = 'text';
+    inpTitle.className = 'edit-input';
+    inpTitle.value = item.title;
+    inpTitle.style.width = '100%';
+
+    const inpETR = document.createElement('input');
+    inpETR.type = 'datetime-local';
+    inpETR.className = 'edit-input';
     inpETR.value = toLocalInputValue(item.etr);
 
-    const selStatus = document.createElement('select'); selStatus.className = 'edit-input';
-    ['Opened', 'Investigating', 'Closed'].forEach(s => {
-      const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === item.status) o.selected = true; selStatus.appendChild(o);
+    const selStatus = document.createElement('select');
+    selStatus.className = 'edit-input';
+    ['Opened', 'Investigating', 'Closed'].forEach((s) => {
+      const o = document.createElement('option');
+      o.value = s;
+      o.textContent = s;
+      if (s === item.status) o.selected = true;
+      selStatus.appendChild(o);
     });
 
-    colNum.innerHTML = ''; colNum.appendChild(inpNum);
-    colTitle.innerHTML = ''; colTitle.appendChild(inpTitle);
-    colETR.innerHTML = ''; colETR.appendChild(inpETR);
-    colStatus.innerHTML = ''; colStatus.appendChild(selStatus);
+    colNum.innerHTML = '';
+    colNum.appendChild(inpNum);
 
-    const saveBtn = document.createElement('button'); saveBtn.className = 'icon-btn'; saveBtn.title = 'Save'; saveBtn.innerHTML = '✅';
-    const cancelBtn = document.createElement('button'); cancelBtn.className = 'icon-btn'; cancelBtn.title = 'Cancel'; cancelBtn.innerHTML = '✖';
-    actions.style.visibility = 'visible'; actions.innerHTML = ''; actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
+    colTitle.innerHTML = '';
+    colTitle.appendChild(inpTitle);
+
+    colETR.innerHTML = '';
+    colETR.appendChild(inpETR);
+
+    colStatus.innerHTML = '';
+    colStatus.appendChild(selStatus);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'icon-btn';
+    saveBtn.title = 'Save';
+    saveBtn.innerHTML = '✅';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'icon-btn';
+    cancelBtn.title = 'Cancel';
+    cancelBtn.innerHTML = '✖';
+
+    actions.style.visibility = 'visible';
+    actions.innerHTML = '';
+    actions.appendChild(saveBtn);
+    actions.appendChild(cancelBtn);
 
     saveBtn.onclick = () => {
       const newNum = inpNum.value.trim();
       const newTitle = inpTitle.value.trim();
       const newETRVal = inpETR.value;
       const newStatus = selStatus.value;
-      if (!newNum || !newTitle || !newETRVal) { alert('Number, Title and ETR required'); return; }
+
+      if (!newNum || !newTitle || !newETRVal) {
+        alert('Number, Title and ETR required');
+        return;
+      }
+
       const iso = new Date(newETRVal).toISOString();
-      const idx = incidents.findIndex(x => x.id === item.id);
+      const idx = incidents.findIndex((x) => x.id === item.id);
       if (idx > -1) {
         incidents[idx] = { ...incidents[idx], number: newNum, title: newTitle, etr: iso, status: newStatus };
         save();
@@ -567,27 +716,29 @@
 
     cancelBtn.onclick = () => renderList();
 
-    const keyHandler = ev => {
+    const keyHandler = (ev) => {
       if (ev.key === 'Escape') cancelBtn.click();
       else if (ev.key === 'Enter') saveBtn.click();
     };
+
     row.addEventListener('keydown', keyHandler, { once: true });
     inpNum.focus();
   }
 
   /* --------------------------- Auto-refresh countdown --------------------------- */
   let tickId = null;
+
   function startAutoTick() {
     if (tickId) clearInterval(tickId);
-    incidents.forEach(it => overdueMap.set(String(it.id), isOverdue(it)));
+    incidents.forEach((it) => overdueMap.set(String(it.id), isOverdue(it)));
 
     tickId = setInterval(() => {
       const rows = document.querySelectorAll('.incident-row');
       let shouldRerender = false;
 
-      rows.forEach(row => {
+      rows.forEach((row) => {
         const id = row.dataset.id;
-        const item = incidents.find(i => String(i.id) === String(id));
+        const item = incidents.find((i) => String(i.id) === String(id));
         if (!item) return;
 
         const cd = row.querySelector('.etr-countdown');
@@ -608,26 +759,28 @@
   }
 
   /* --------------------------- Storage sync --------------------------- */
-  window.addEventListener('storage', e => {
+  window.addEventListener('storage', (e) => {
     if (e.key === STORAGE_KEY) {
-      try { incidents = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } 
-      catch { incidents = []; }
-      incidents.forEach(it => overdueMap.set(String(it.id), isOverdue(it)));
+      try {
+        incidents = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      } catch {
+        incidents = [];
+      }
+      incidents.forEach((it) => overdueMap.set(String(it.id), isOverdue(it)));
       renderList();
     }
   });
 
   /* --------------------------- Key shortcuts --------------------------- */
-  if (numberInput) numberInput.addEventListener('keydown', e => { if (e.key === 'Enter') { titleEl?.focus(); } });
-  if (titleEl) titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { etrEl?.focus(); } });
+  if (numberInput) numberInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') titleEl?.focus(); });
+  if (titleEl) titleEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') etrEl?.focus(); });
 
   /* --------------------------- Init --------------------------- */
-  if (!perPage || isNaN(perPage)) perPage = 10;
   renderList();
   startAutoTick();
-
 })();
 </script>
+
 
 </body>
 </html>
