@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ingress Follow-up</title>
+
+  <!-- App theme -->
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    /* ===============================
+       TOOLBAR
+    =============================== */
+    .ingress-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      justify-content: space-between;
+    }
+
+    .ingress-counter-card {
+      backdrop-filter: var(--blur);
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      box-shadow: var(--shadow);
+      font-size: 0.85rem;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .ingress-counter-card strong {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-right: 6px;
+    }
+
+    /* ===============================
+       LIST
+    =============================== */
+    .ingress-list {
+      margin-top: 18px;
+    }
+
+    .ingress-cc {
+      padding: 14px 6px;
+      border-bottom: 1px solid var(--panel-border);
+      transition: background 0.2s ease;
+    }
+
+    .ingress-cc:hover {
+      background: rgba(255,255,255,0.35);
+    }
+
+    .ingress-cc:last-child {
+      border-bottom: none;
+    }
+
+    /* ===============================
+       CC HEADER
+    =============================== */
+    .ingress-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .ingress-header strong {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+
+    .ingress-meta {
+      font-size: 0.82rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .follow-ok   { color: #1a7f37; }
+    .follow-warn { color: #bf8700; }
+    .follow-late { color: #cf222e; }
+
+    /* ===============================
+       THREAD
+    =============================== */
+    .ingress-thread {
+      margin-left: 10px;
+      padding-left: 14px;
+      border-left: 2px solid var(--panel-border);
+      margin-top: 8px;
+      display: none;
+    }
+
+    .ingress-cc.open .ingress-thread {
+      display: block;
+    }
+
+    /* ===============================
+       NOTES
+    =============================== */
+    .ingress-note {
+      padding: 10px 0;
+      animation: noteIn 0.15s ease-out;
+    }
+
+    .ingress-note time {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .ingress-note div {
+      line-height: 1.55;
+      max-width: 900px;
+    }
+
+    @keyframes noteIn {
+      from { opacity: 0; transform: translateY(2px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar glass-nav">
+  <div class="nav-left">
+    <img src="./images/logo.png" class="nav-logo" />
+    <span class="nav-title">Ingress Follow-Up</span>
+  </div>
+  <div class="nav-right">
+    <a href="index.html"><button class="glass-button">Cases</button></a>
+    <a href="incident.html"><button class="glass-button">Incident</button></a>
+    <a href="dashboard.html" class="glass-link">Dashboard</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <!-- SEARCH + COUNTER -->
+  <header>
+    <div class="controls ingress-toolbar">
+      <input
+        id="ingressSearch"
+        type="search"
+        placeholder="Search CC or keyword (TLN, Duo, filter…)"
+      />
+      <div id="ccCounter" class="ingress-counter-card"></div>
+    </div>
+  </header>
+
+  <!-- LIST -->
+  <div id="ingressList" class="ingress-list"></div>
+</div>
+
+<script>
+/* ===============================
+   CONFIG
+=============================== */
+const NOTES_KEY = "notes_v1";
+const listEl = document.getElementById("ingressList");
+const searchInput = document.getElementById("ingressSearch");
+const counterEl = document.getElementById("ccCounter");
+
+/* ===============================
+   SAFE DATE PARSING
+=============================== */
+function parseDate(value) {
+  if (value === null || value === undefined) return null;
+  if (!isNaN(value)) {
+    const d = new Date(Number(value));
+    return isNaN(d) ? null : d;
+  }
+  const d = new Date(value);
+  return isNaN(d) ? null : d;
+}
+
+/* ===============================
+   LOAD INGRESS NOTES
+=============================== */
+function loadIngressNotes() {
+  let notes = [];
+  try {
+    notes = JSON.parse(localStorage.getItem(NOTES_KEY)) || [];
+  } catch {
+    notes = [];
+  }
+
+  return notes.filter(n =>
+    n &&
+    n.cc &&
+    n.title &&
+    typeof n.content === "string" &&
+    String(n.title).toLowerCase().includes("ingress")
+  );
+}
+
+/* ===============================
+   GROUP BY CC
+=============================== */
+function groupByCC(notes) {
+  const map = {};
+  notes.forEach(n => {
+    if (!map[n.cc]) map[n.cc] = [];
+    map[n.cc].push(n);
+  });
+  return map;
+}
+
+/* ===============================
+   FOLLOW-UP HELPERS
+=============================== */
+function getLatestDate(thread) {
+  let latest = null;
+  thread.forEach(n => {
+    const d = parseDate(n.createdAt);
+    if (d && (!latest || d > latest)) latest = d;
+  });
+  return latest;
+}
+
+function followUpClass(date) {
+  if (!date) return "follow-ok";
+  const days = (Date.now() - date.getTime()) / 86400000;
+  if (days <= 2) return "follow-ok";
+  if (days <= 5) return "follow-warn";
+  return "follow-late";
+}
+
+function followUpLabel(date) {
+  if (!date) return "updated";
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  if (days <= 0) return "updated today";
+  if (days === 1) return "updated yesterday";
+  return `updated ${days} days ago`;
+}
+
+/* ===============================
+   SEARCH MATCH
+=============================== */
+function matchesSearch(cc, thread, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  if (String(cc).toLowerCase().includes(q)) return true;
+  return thread.some(n => n.content.toLowerCase().includes(q));
+}
+
+/* ===============================
+   RENDER
+=============================== */
+function renderIngress() {
+  const notes = loadIngressNotes();
+  const grouped = groupByCC(notes);
+  const query = searchInput.value.trim();
+
+  listEl.innerHTML = "";
+  let visibleCCs = 0;
+
+  Object.entries(grouped).forEach(([cc, thread]) => {
+    if (!matchesSearch(cc, thread, query)) return;
+
+    visibleCCs++;
+
+    thread.sort((a, b) => {
+      const da = parseDate(a.createdAt);
+      const db = parseDate(b.createdAt);
+      if (!da && !db) return 0;
+      if (!da) return -1;
+      if (!db) return 1;
+      return da - db;
+    });
+
+    const latestDate = getLatestDate(thread);
+
+    const ccEl = document.createElement("section");
+    ccEl.className = "ingress-cc";
+
+    const header = document.createElement("div");
+    header.className = "ingress-header";
+    header.innerHTML = `
+      <strong>CC ${cc}</strong>
+      <span class="ingress-meta ${followUpClass(latestDate)}">
+        ${followUpLabel(latestDate)} · ${thread.length} follow-ups
+      </span>
+    `;
+
+    const threadEl = document.createElement("div");
+    threadEl.className = "ingress-thread";
+
+    thread.forEach(note => {
+      const noteEl = document.createElement("div");
+      noteEl.className = "ingress-note";
+
+      const d = parseDate(note.createdAt);
+      const dateText = d ? d.toLocaleString() : "";
+
+      noteEl.innerHTML = `
+        <time>${dateText}</time>
+        <div>${note.content.replace(/\n/g, "<br>")}</div>
+      `;
+
+      threadEl.appendChild(noteEl);
+    });
+
+    header.onclick = () => {
+      ccEl.classList.toggle("open");
+    };
+
+    ccEl.appendChild(header);
+    ccEl.appendChild(threadEl);
+    listEl.appendChild(ccEl);
+  });
+
+  counterEl.innerHTML = `
+    <strong>${visibleCCs}</strong> Ingress Cases
+  `;
+}
+
+/* ===============================
+   EVENTS
+=============================== */
+searchInput.addEventListener("input", renderIngress);
+
+window.addEventListener("storage", e => {
+  if (e.key === NOTES_KEY) renderIngress();
+});
+
+/* ===============================
+   INIT
+=============================== */
+renderIngress();
+</script>
+
+</body>
+</html>
