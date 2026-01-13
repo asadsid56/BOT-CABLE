@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ingress Follow-up</title>
 
-  <!-- App theme -->
   <link rel="stylesheet" href="style.css">
 
   <style>
@@ -15,8 +14,8 @@
     .ingress-toolbar {
       display: flex;
       align-items: center;
-      gap: 14px;
       justify-content: space-between;
+      gap: 14px;
     }
 
     .ingress-counter-card {
@@ -24,17 +23,15 @@
       background: var(--panel);
       border: 1px solid var(--panel-border);
       border-radius: 12px;
-      padding: 8px 14px;
+      padding: 6px 12px;
       box-shadow: var(--shadow);
-      font-size: 0.85rem;
-      font-weight: 500;
+      font-size: 0.8rem;
       white-space: nowrap;
     }
 
     .ingress-counter-card strong {
-      font-size: 1.05rem;
-      font-weight: 600;
-      margin-right: 6px;
+      font-size: 1rem;
+      margin-right: 4px;
     }
 
     /* ===============================
@@ -45,13 +42,7 @@
     }
 
     .ingress-cc {
-      padding: 14px 6px;
-      border-bottom: 1px solid var(--panel-border);
-      transition: background 0.2s ease;
-    }
-
-    .ingress-cc:hover {
-      background: rgba(255,255,255,0.35);
+      padding: 14px 4px;
     }
 
     .ingress-cc:last-child {
@@ -65,25 +56,85 @@
       display: grid;
       grid-template-columns: 1fr auto;
       align-items: center;
-      gap: 12px;
       cursor: pointer;
     }
 
     .ingress-header strong {
       font-size: 1.05rem;
       font-weight: 600;
-      letter-spacing: 0.2px;
     }
 
     .ingress-meta {
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       color: var(--muted);
       white-space: nowrap;
     }
 
-    .follow-ok   { color: #1a7f37; }
-    .follow-warn { color: #bf8700; }
-    .follow-late { color: #cf222e; }
+    /* ===============================
+       CLEAN TIMELINE
+    =============================== */
+    .timeline {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      align-items: center;
+      margin: 8px 0 4px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 2px;
+      background: var(--panel-border);
+      transform: translateY(-50%);
+    }
+
+    .timeline-step {
+      position: relative;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .timeline-dot {
+      width: 8px;
+      height: 8px;
+      margin: 0 auto;
+      border-radius: 50%;
+      background: var(--panel-border);
+      position: relative;
+      z-index: 1;
+      transition: all 0.2s ease;
+    }
+
+    .timeline-step.done .timeline-dot {
+      background: #1a7f37;
+    }
+
+    .timeline-step.active .timeline-dot {
+      background: #0969da;
+      box-shadow: 0 0 0 3px rgba(9,105,218,0.25);
+    }
+
+    .timeline-step::after {
+      content: attr(data-label);
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.65rem;
+      color: var(--muted);
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+    }
+
+    .timeline-step:hover::after {
+      opacity: 1;
+    }
 
     /* ===============================
        THREAD
@@ -105,35 +156,28 @@
     =============================== */
     .ingress-note {
       padding: 10px 0;
-      animation: noteIn 0.15s ease-out;
     }
 
     .ingress-note time {
       display: block;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--muted);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
 
     .ingress-note div {
       line-height: 1.55;
       max-width: 900px;
     }
-
-    @keyframes noteIn {
-      from { opacity: 0; transform: translateY(2px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
   </style>
 </head>
 
 <body>
 
-<!-- NAVBAR -->
 <nav class="navbar glass-nav">
   <div class="nav-left">
     <img src="./images/logo.png" class="nav-logo" />
-    <span class="nav-title">Ingress Follow-Up</span>
+    <span class="nav-title">Ingress Follow-up</span>
   </div>
   <div class="nav-right">
     <a href="index.html"><button class="glass-button">Cases</button></a>
@@ -144,131 +188,84 @@
 
 <div class="wrap">
 
-  <!-- SEARCH + COUNTER -->
   <header>
     <div class="controls ingress-toolbar">
-      <input
-        id="ingressSearch"
-        type="search"
-        placeholder="Search CC or keyword (TLN, Duo, filter…)"
-      />
+      <input id="ingressSearch" type="search"
+        placeholder="Search CC or keyword (TLN, Duo, filter…)" />
       <div id="ccCounter" class="ingress-counter-card"></div>
     </div>
   </header>
 
-  <!-- LIST -->
   <div id="ingressList" class="ingress-list"></div>
 </div>
 
 <script>
-/* ===============================
-   CONFIG
-=============================== */
 const NOTES_KEY = "notes_v1";
+const STATUS_KEY = "ingress_status";
+
+const STATUS_STEPS = [
+  "Created",
+  "Customer contacted",
+  "Duo repair planned",
+  "Awaiting TLN/Wyre",
+  "Appointment done",
+  "Verification pending",
+  "Closed"
+];
+
 const listEl = document.getElementById("ingressList");
 const searchInput = document.getElementById("ingressSearch");
 const counterEl = document.getElementById("ccCounter");
 
-/* ===============================
-   SAFE DATE PARSING
-=============================== */
-function parseDate(value) {
-  if (value === null || value === undefined) return null;
-  if (!isNaN(value)) {
-    const d = new Date(Number(value));
+function parseDate(v) {
+  if (v === null || v === undefined || v === "") return null;
+  if (!isNaN(v)) {
+    const d = new Date(Number(v));
     return isNaN(d) ? null : d;
   }
-  const d = new Date(value);
+  const d = new Date(v);
   return isNaN(d) ? null : d;
 }
 
-/* ===============================
-   LOAD INGRESS NOTES
-=============================== */
-function loadIngressNotes() {
-  let notes = [];
-  try {
-    notes = JSON.parse(localStorage.getItem(NOTES_KEY)) || [];
-  } catch {
-    notes = [];
-  }
-
-  return notes.filter(n =>
-    n &&
-    n.cc &&
-    n.title &&
-    typeof n.content === "string" &&
+function loadNotes() {
+  return (JSON.parse(localStorage.getItem(NOTES_KEY)) || []).filter(
+    n => n && n.cc && n.title &&
     String(n.title).toLowerCase().includes("ingress")
   );
 }
 
-/* ===============================
-   GROUP BY CC
-=============================== */
-function groupByCC(notes) {
-  const map = {};
+function loadStatus() {
+  return JSON.parse(localStorage.getItem(STATUS_KEY)) || {};
+}
+
+function saveStatus(map) {
+  localStorage.setItem(STATUS_KEY, JSON.stringify(map));
+}
+
+function render() {
+  const notes = loadNotes();
+  const statusMap = loadStatus();
+  const q = searchInput.value.toLowerCase();
+
+  const grouped = {};
   notes.forEach(n => {
-    if (!map[n.cc]) map[n.cc] = [];
-    map[n.cc].push(n);
+    if (!grouped[n.cc]) grouped[n.cc] = [];
+    grouped[n.cc].push(n);
   });
-  return map;
-}
-
-/* ===============================
-   FOLLOW-UP HELPERS
-=============================== */
-function getLatestDate(thread) {
-  let latest = null;
-  thread.forEach(n => {
-    const d = parseDate(n.createdAt);
-    if (d && (!latest || d > latest)) latest = d;
-  });
-  return latest;
-}
-
-function followUpClass(date) {
-  if (!date) return "follow-ok";
-  const days = (Date.now() - date.getTime()) / 86400000;
-  if (days <= 2) return "follow-ok";
-  if (days <= 5) return "follow-warn";
-  return "follow-late";
-}
-
-function followUpLabel(date) {
-  if (!date) return "updated";
-  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
-  if (days <= 0) return "updated today";
-  if (days === 1) return "updated yesterday";
-  return `updated ${days} days ago`;
-}
-
-/* ===============================
-   SEARCH MATCH
-=============================== */
-function matchesSearch(cc, thread, query) {
-  if (!query) return true;
-  const q = query.toLowerCase();
-  if (String(cc).toLowerCase().includes(q)) return true;
-  return thread.some(n => n.content.toLowerCase().includes(q));
-}
-
-/* ===============================
-   RENDER
-=============================== */
-function renderIngress() {
-  const notes = loadIngressNotes();
-  const grouped = groupByCC(notes);
-  const query = searchInput.value.trim();
 
   listEl.innerHTML = "";
-  let visibleCCs = 0;
+  let count = 0;
 
   Object.entries(grouped).forEach(([cc, thread]) => {
-    if (!matchesSearch(cc, thread, query)) return;
+    if (
+      q &&
+      !cc.toLowerCase().includes(q) &&
+      !thread.some(n => n.content.toLowerCase().includes(q))
+    ) return;
 
-    visibleCCs++;
+    count++;
 
-    thread.sort((a, b) => {
+    thread.sort((a,b)=>{
       const da = parseDate(a.createdAt);
       const db = parseDate(b.createdAt);
       if (!da && !db) return 0;
@@ -277,65 +274,61 @@ function renderIngress() {
       return da - db;
     });
 
-    const latestDate = getLatestDate(thread);
+    const current = statusMap[cc] ?? 0;
 
     const ccEl = document.createElement("section");
     ccEl.className = "ingress-cc";
 
-    const header = document.createElement("div");
-    header.className = "ingress-header";
-    header.innerHTML = `
-      <strong>CC ${cc}</strong>
-      <span class="ingress-meta ${followUpClass(latestDate)}">
-        ${followUpLabel(latestDate)} · ${thread.length} follow-ups
-      </span>
+    ccEl.innerHTML = `
+      <div class="ingress-header">
+        <strong>CC ${cc}</strong>
+        <span class="ingress-meta">${thread.length} follow-ups</span>
+      </div>
+
+      <div class="timeline">
+        ${STATUS_STEPS.map((s,i)=>`
+          <div class="timeline-step
+            ${i < current ? "done" : ""}
+            ${i === current ? "active" : ""}"
+            data-step="${i}"
+            data-label="${s}">
+            <div class="timeline-dot"></div>
+          </div>`).join("")}
+      </div>
+
+      <div class="ingress-thread">
+        ${thread.map(n=>{
+          const d = parseDate(n.createdAt);
+          return `
+            <div class="ingress-note">
+              <time>${d ? d.toLocaleString() : ""}</time>
+              <div>${n.content.replace(/\n/g,"<br>")}</div>
+            </div>`;
+        }).join("")}
+      </div>
     `;
 
-    const threadEl = document.createElement("div");
-    threadEl.className = "ingress-thread";
-
-    thread.forEach(note => {
-      const noteEl = document.createElement("div");
-      noteEl.className = "ingress-note";
-
-      const d = parseDate(note.createdAt);
-      const dateText = d ? d.toLocaleString() : "";
-
-      noteEl.innerHTML = `
-        <time>${dateText}</time>
-        <div>${note.content.replace(/\n/g, "<br>")}</div>
-      `;
-
-      threadEl.appendChild(noteEl);
+    ccEl.querySelectorAll(".timeline-step").forEach(step=>{
+      step.onclick = e => {
+        statusMap[cc] = Number(step.dataset.step);
+        saveStatus(statusMap);
+        render();
+        e.stopPropagation();
+      };
     });
 
-    header.onclick = () => {
-      ccEl.classList.toggle("open");
-    };
+    ccEl.querySelector(".ingress-header").onclick =
+      () => ccEl.classList.toggle("open");
 
-    ccEl.appendChild(header);
-    ccEl.appendChild(threadEl);
     listEl.appendChild(ccEl);
   });
 
-  counterEl.innerHTML = `
-    <strong>${visibleCCs}</strong> Ingress Cases
-  `;
+  counterEl.innerHTML = `<strong>${count}</strong> Ingress Cases`;
 }
 
-/* ===============================
-   EVENTS
-=============================== */
-searchInput.addEventListener("input", renderIngress);
-
-window.addEventListener("storage", e => {
-  if (e.key === NOTES_KEY) renderIngress();
-});
-
-/* ===============================
-   INIT
-=============================== */
-renderIngress();
+searchInput.addEventListener("input", render);
+window.addEventListener("storage", render);
+render();
 </script>
 
 </body>
